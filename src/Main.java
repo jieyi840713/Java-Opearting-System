@@ -1,5 +1,8 @@
 // lunch threads (Class implement Runnable interface)
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 class PrintNumber implements Runnable {
     private int max;
 
@@ -34,12 +37,12 @@ class PrintChar implements Runnable {
 
 public class Main {
     public static void main(String[] args) {
-        Thread thread1 = new Thread(new PrintNumber(50));
-        Thread thread2 = new Thread(new PrintNumber(50));
-        Thread thread3 = new Thread(new PrintChar('a',50));
+//        ExecutorService executorService= Executors.newFixedThreadPool(4);
+        ExecutorService executorService= Executors.newCachedThreadPool();
+        executorService.execute(new PrintChar('a',20));
+        executorService.execute(new PrintChar('b',20));
+        executorService.execute(new PrintNumber(20));
 
-        thread1.start();
-        thread2.start();
-        thread3.start();
+        executorService.shutdown();
     }
 }
