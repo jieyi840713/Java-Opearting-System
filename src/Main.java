@@ -1,48 +1,48 @@
-// lunch threads (Class implement Runnable interface)
-
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-class PrintNumber implements Runnable {
-    private int max;
-
-    public PrintNumber (int max){
-        this.max=max;
-    }
-
-    @Override
-    public void run() {
-        for(int i = 0 ; i< max ;i++){
-            System.out.print(i + " ");
-        }
-    }
-}
-
-class PrintChar implements Runnable {
-    private int times;
-    private char aChar;
-
-    public PrintChar (char aChar, int times){
-        this.aChar = aChar;
-        this.times = times;
-    }
-
-    @Override
-    public void run() {
-        for(int i = 0; i < times ; i++){
-            System.out.print(aChar + " ");
-        }
-    }
-}
-
 public class Main {
-    public static void main(String[] args) {
-//        ExecutorService executorService= Executors.newFixedThreadPool(4);
-        ExecutorService executorService= Executors.newCachedThreadPool();
-        executorService.execute(new PrintChar('a',20));
-        executorService.execute(new PrintChar('b',20));
-        executorService.execute(new PrintNumber(20));
 
+    private static Account account = new Account();
+
+    private static class Account {
+        private int balance = 0 ;
+
+        public int getBalance(){
+            return this.balance;
+        }
+
+        public void deposit(){
+            int newBalance = this.balance+1;
+            try{
+                Thread.sleep(3);
+            } catch (InterruptedException e){
+                e.printStackTrace();
+            }
+
+            this.balance = newBalance;
+        }
+    }
+
+    private static class AddMoneyTask implements Runnable{
+
+        @Override
+        public void run() {
+            account.deposit();
+        }
+    }
+    public static void main(String[] args) {
+        ExecutorService executorService = Executors.newCachedThreadPool();
+
+        // create 300 task;
+        for(int i = 0 ; i< 300 ; i++){
+            executorService.execute(new AddMoneyTask());
+        }
         executorService.shutdown();
+        while (!executorService.isTerminated()){
+
+        }
+
+        System.out.println("The balance is "+ account.getBalance());
     }
 }
