@@ -1,4 +1,5 @@
 import java.sql.Connection;
+import java.util.LinkedList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Condition;
@@ -7,52 +8,75 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Main {
 
-    private static Account account = new Account();
+    private static Buffer buffer = new Buffer();
 
-    private static class Account {
-        // fields
-        private int balance = 0;
+    private static class Buffer {
+        private static final int CAPACITY = 1;
+        private LinkedList<Integer> queue = new LinkedList<>();
+
         private static Lock lock = new ReentrantLock();
-        private static Condition newDeposit = lock.newCondition();
+        private static Condition notEmpty = lock.newCondition();
+        private static Condition notFull = lock.newCondition();
 
-        public int getBalance() {
-            return this.balance;
-        }
-
-        public void deposit(int amount) {
+        public void write(int value) {
             lock.lock();
-            balance += amount;
-            System.out.println("Deposit " + amount + "\t\t\t\t\t" + getBalance());
-            newDeposit.signalAll();
-            lock.unlock();
-        }
-
-        public void withdraw(int amount) {
-            lock.lock();
-
             try {
-                while (balance < amount) {
-                    System.out.println("\t\t\t\t\t\t\tWait for a deposit");
-                    newDeposit.await();
+                while (queue.size() == CAPACITY) {
+                    notFull.await();
                 }
-                balance -= amount;
-                System.out.println("\t\t\t\t\t\t\tWithdraw " + amount + "\t\t" + getBalance());
+                queue.offer(value);
+                notEmpty.signalAll();
             } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+                e.printStackTrace();
             } finally {
                 lock.unlock();
+            }
+
+        }
+
+        public int read() {
+            int value = 0;
+            lock.lock();
+            try {
+                while (queue.isEmpty()) {
+                    notEmpty.await();
+                }
+                value = queue.remove();
+                notFull.signalAll();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                lock.unlock();
+                return value;
             }
         }
     }
 
-    private static class AddMoneyTask implements Runnable {
+    private static class Consumer implements Runnable {
+
+        @Override
+        public void run() {
+            while (true) {
+                try {
+                    System.out.println("Consumer reads " + buffer.read());
+                    Thread.sleep((int) Math.random() * 1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private static class Producer implements Runnable {
 
         @Override
         public void run() {
             try {
+                int i = 0;
                 while (true) {
-                    account.deposit((int) (Math.random() * 20) + 5);
-                    Thread.sleep(500);
+                    System.out.println("Producer writes " + i);
+                    buffer.write(i++);
+                    Thread.sleep((int) Math.random() * 1000);
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -60,20 +84,10 @@ public class Main {
         }
     }
 
-    public static class WithdrawTask implements Runnable {
-
-        @Override
-        public void run() {
-            while (true) {
-                account.withdraw((int) (Math.random() * 20) + 50);
-            }
-        }
-    }
-
     public static void main(String[] args) {
         ExecutorService executorService = Executors.newFixedThreadPool(2);
-        executorService.execute(new AddMoneyTask());
-        executorService.execute(new WithdrawTask());
+        executorService.execute(new Producer());
+        executorService.execute(new Consumer());
         executorService.shutdown();
     }
 }
