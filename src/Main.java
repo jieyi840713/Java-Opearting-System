@@ -1,98 +1,60 @@
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
+class MergeSort{
 
-public class Main {
-    static int[] buffer = new int[3];
-    static int producerIndex = 0;
-    static int consumerIndex = 0;
-    static Semaphore s_lock, n_lock, e_lock;
+    public static void mergeSort(int[] list){
+        if(list.length >1){
+            // merge sort the first half
+            int[] firstHalf = new int[list.length / 2];
+            System.arraycopy(list, 0, firstHalf,0,list.length/2);
+            mergeSort(firstHalf);
 
-    private static void append(int i) {
-        buffer[producerIndex] = i;
-        if (producerIndex != buffer.length - 1) {
-            producerIndex++;
-        } else {
-            producerIndex = 0;
+            // merge sort the second half
+            int secondHalfLength = list.length - list.length /2;
+            int[] secondHalf = new int[secondHalfLength];
+            System.arraycopy(list, list.length/2, secondHalf, 0, secondHalfLength);
+            mergeSort(secondHalf);
+
+            // merge
+            merge(firstHalf,secondHalf, list);
         }
     }
+    public static void merge (int[] list1, int[] list2, int[] temp){
+        int i = 0 ;
+        int j = 0;
+        int k = 0;
 
-    private static int take() {
-        int tmp = buffer[consumerIndex];
-        if (consumerIndex != buffer.length - 1) {
-            consumerIndex++;
-        } else {
-            consumerIndex = 0;
-        }
-        return tmp;
-    }
-
-    private static class ProducerTask implements Runnable {
-        int thread_id;
-
-        public ProducerTask(int thread_id) {
-            this.thread_id = thread_id;
-            System.out.println("Producer #" + thread_id + " launched.");
-        }
-
-        @Override
-        public void run() {
-            try {
-                for (int i = 0; i < 20; i++) {
-                    e_lock.acquire();
-                    s_lock.acquire();
-                    int randomInt = (int) (Math.random() * 10);
-                    System.out.println("Producer #" + thread_id + " produced " + randomInt);
-                    append(randomInt);
-                    s_lock.release();
-                    n_lock.release();
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+        while (i< list1.length && j < list2.length){
+            if(list1[i] < list2[j]){
+                temp[k] = list1[i];
+                i++;
+            }else{
+                temp[k] = list2[j];
+                j++;
             }
-        }
-    }
-
-    private static class ConsumerTask implements Runnable {
-        int thread_id;
-
-        public ConsumerTask(int thread_id) {
-            this.thread_id = thread_id;
-            System.out.println("Consumer #" + thread_id + " launched.");
+            k++;
         }
 
-        @Override
-        public void run() {
-            try {
-                int value_took;
-                for (int i = 0; i < 20; i++) {
-                    n_lock.acquire();
-                    s_lock.acquire();
-                    value_took = take();
-                    System.out.println("Consumer #" + thread_id + " consumed " + value_took);
-                    s_lock.release();
-                    e_lock.release();
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        while (i< list1.length){
+            temp[k] = list1[i];
+            k++;
+            i++;
+        }
+
+        while (j< list2.length){
+            temp[k] = list2[j];
+            k++;
+            j++;
         }
     }
 
     public static void main(String[] args) {
-        System.out.println("Using " + 4 + " threads.");
-        s_lock = new Semaphore(1);
-        n_lock = new Semaphore(0);
-        e_lock = new Semaphore(buffer.length);
-
-        ExecutorService executorService = Executors.newFixedThreadPool(4);
-        for (int i = 0; i < 4; i++) {
-            if (i % 2 == 0) {
-                executorService.execute(new ProducerTask(i));
-            } else {
-                executorService.execute(new ConsumerTask(i));
-            }
+        int[] list= {2,4,6,7,1,0,-3,-55,3214,4364,2,3,6,878,5,4};
+        mergeSort(list);
+        for(int n : list){
+            System.out.print(n + " ");
         }
-        executorService.shutdown();
     }
+}
+
+public class Main {
+
 }
