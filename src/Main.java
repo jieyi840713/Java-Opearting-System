@@ -1,82 +1,77 @@
-import java.sql.Connection;
-import java.util.LinkedList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.Semaphore;
 
 public class Main {
+    static int[] buffer = new int[3];
+    static int producerIndex = 0;
+    static int consumerIndex = 0;
+    static Semaphore s_lock, n_lock, e_lock;
 
-    private static Buffer buffer = new Buffer();
-
-    private static class Buffer {
-        private static final int CAPACITY = 1;
-        private LinkedList<Integer> queue = new LinkedList<>();
-
-        private static Lock lock = new ReentrantLock();
-        private static Condition notEmpty = lock.newCondition();
-        private static Condition notFull = lock.newCondition();
-
-        public void write(int value) {
-            lock.lock();
-            try {
-                while (queue.size() == CAPACITY) {
-                    notFull.await();
-                }
-                queue.offer(value);
-                notEmpty.signalAll();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } finally {
-                lock.unlock();
-            }
-
-        }
-
-        public int read() {
-            int value = 0;
-            lock.lock();
-            try {
-                while (queue.isEmpty()) {
-                    notEmpty.await();
-                }
-                value = queue.remove();
-                notFull.signalAll();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } finally {
-                lock.unlock();
-                return value;
-            }
+    private static void append(int i) {
+        buffer[producerIndex] = i;
+        if (producerIndex != buffer.length - 1) {
+            producerIndex++;
+        } else {
+            producerIndex = 0;
         }
     }
 
-    private static class Consumer implements Runnable {
-
-        @Override
-        public void run() {
-            while (true) {
-                try {
-                    System.out.println("Consumer reads " + buffer.read());
-                    Thread.sleep((int) Math.random() * 1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
+    private static int take() {
+        int tmp = buffer[consumerIndex];
+        if (consumerIndex != buffer.length - 1) {
+            consumerIndex++;
+        } else {
+            consumerIndex = 0;
         }
+        return tmp;
     }
 
-    private static class Producer implements Runnable {
+    private static class ProducerTask implements Runnable {
+        int thread_id;
+
+        public ProducerTask(int thread_id) {
+            this.thread_id = thread_id;
+            System.out.println("Producer #" + thread_id + " launched.");
+        }
 
         @Override
         public void run() {
             try {
-                int i = 0;
-                while (true) {
-                    System.out.println("Producer writes " + i);
-                    buffer.write(i++);
-                    Thread.sleep((int) Math.random() * 1000);
+                for (int i = 0; i < 20; i++) {
+                    e_lock.acquire();
+                    s_lock.acquire();
+                    int randomInt = (int) (Math.random() * 10);
+                    System.out.println("Producer #" + thread_id + " produced " + randomInt);
+                    append(randomInt);
+                    s_lock.release();
+                    n_lock.release();
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private static class ConsumerTask implements Runnable {
+        int thread_id;
+
+        public ConsumerTask(int thread_id) {
+            this.thread_id = thread_id;
+            System.out.println("Consumer #" + thread_id + " launched.");
+        }
+
+        @Override
+        public void run() {
+            try {
+                int value_took;
+                for (int i = 0; i < 20; i++) {
+                    n_lock.acquire();
+                    s_lock.acquire();
+                    value_took = take();
+                    System.out.println("Consumer #" + thread_id + " consumed " + value_took);
+                    s_lock.release();
+                    e_lock.release();
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -85,9 +80,19 @@ public class Main {
     }
 
     public static void main(String[] args) {
-        ExecutorService executorService = Executors.newFixedThreadPool(2);
-        executorService.execute(new Producer());
-        executorService.execute(new Consumer());
+        System.out.println("Using " + 4 + " threads.");
+        s_lock = new Semaphore(1);
+        n_lock = new Semaphore(0);
+        e_lock = new Semaphore(buffer.length);
+
+        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        for (int i = 0; i < 4; i++) {
+            if (i % 2 == 0) {
+                executorService.execute(new ProducerTask(i));
+            } else {
+                executorService.execute(new ConsumerTask(i));
+            }
+        }
         executorService.shutdown();
     }
 }
